@@ -39,72 +39,56 @@ def add_article_to_db(article_title, article_date):
     db.execute("INSERT INTO magazine VALUES (?,?)", (article_title, article_date))
     db_connection.commit()
 
-def convert(feed_name, papers):
-    str = ''
-    filename = './%s.md' % feed_name
-    with open(filename,'w') as file_writer:
-        for p in papers:
-            if p['tag']=='text':
-                str += p['content'].replace('c_start','**').replace('c_end','**')  #这个是替换颜色,使用加粗
+def html2md(data,feed_name=None,rooturl=None):
+    # data = Tomd(data).markdown
+    # data = u'''<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"></head><body>%s </body></html>''' % data
+
+    soup = BeautifulSoup(data, 'lxml')#,'html.parser',from_encoding='utf-8'
+    head = str(soup.head)
+    content = soup.find(id='content')
+    if content == None:
+         content = soup.body
+
+
+    clears = ['h4',]
+    for c in clears:
+        All = content.findAll(c)
+        for a in All:
+            try:
+                a.find('a').decompose()
+            except Exception as e:
                 pass
-            elif p['tag']=='code':
-                str += '```'+'\r\n'+p['content']+'\r\n'+'```'  #这个是代码框的添加
 
-            else:
-                #![](//upload-images.jianshu.io/upload_images/1823443-7c4c920514b8f0cf.jpg?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)#这个是图片链接的转化
-                str += '![](%s)'%(p['content'])
-                str += '\r\n'+str+'\r\n'
-            file_writer.write(str)
-            file_writer.write('\r\n')
- 
-    file_writer.close()
-    return str
+            try:
+                a['class'].clear()
+            except Exception as e:
+                pass
 
+    dels = ['comments','nav-single']
+    for tag in dels:
+        ts = content.findAll(id=tag)
+        for t in ts:
+            if t !=None:
+                t.decompose()
 
-
-def html2md(data,article_url=None):
-    papers = []
-    soup = BeautifulSoup(data, 'html.parser')#,'html.parser',from_encoding='utf-8'
-    pres = soup.findAll('pre')
-    for pre in pres:
-        pre.name ='p' 
-        pre['code']='yes'
-
-    ps = soup.findAll('p')
-    for p in ps:
-        img = p.img
-        if img !=None:
+    imgs = content.findAll('img')
+    for img in imgs:
+        try:
             parsed = urllib.parse.urlparse(img['src'])
             if parsed.scheme=='' :
-                img['src']=article_url+img['src']
-            content={'tag':'img','content':img['src']}
-            papers.append(content)
-        if p.get('code')=='yes':
-            # content={'tag':'code','content':p.text.replace('&nbsp:','').strip()}
-            content={'tag':'code','content':p.text.replace(' :','').strip()}
-            papers.append(content)
+                img['src']=rooturl+img['src']
+        except :
+            pass
 
-        elif p.span != None:
-                spans = p.findAll('span')
-                for span in spans:
-                    print('span',span.get('style'))
-                    if span.string!=None:
-                        span.name = 'color'
-                        if span.string!=None:
-                            span.string = 'c_start'+span.string+'c_end'
-                    # if span.get('style').findAll('color')!=-1:
-                    #     # del span['style']
-                    #     span.name='color'
-                    #     if span.string!=None:
-                    #         span.string = 'c_start'+span.string+'c_end' 
-        links = p.findAll('a')
-        for link in links:
-            if link.string!=None:
-                link.string = '['+link.string+']'+'('+link.string+')'
-        
-            content={'tag':'text','content':p.text.replace('&nbsp:','').strip()}
-            papers.append(content)
-    return papers
+    filename = './%s.md' % feed_name
+    data = u'''<!DOCTYPE html><html lang="zh-CN">%s<body>%s </body></html>''' % (head,str(content))
+    data = Tomd(data).markdown
+    with open(filename,'w') as file_writer:
+            file_writer.write(data)
+    file_writer.close()
+
+    return data
+
 def mkdir(path):
 
     import os
@@ -125,39 +109,34 @@ def send_notification(feed_name, article_title, article_url):
         article_title (str): The title of an article
         article_url (str): The url to access the article
     """
-
-    smtp_server = smtplib.SMTP('smtp.qq.com', 587)
-    smtp_server.ehlo()
-    smtp_server.starttls()
-    smtp_server.login('xxxxxxxxx@qq.com', 'xxxxxxxxxx')
     text = '\nHi there is a new %s article :%s . \nYou can read it here %s' % (feed_name, article_title, article_url)
-    print(text)
     # http://blinky.nemui.org/shot?http://www.baidu.com
+    print(text)
     mkdir("./"+feed_name)
     article_title=article_title.strip()# 去除首位空格
     article_title=article_title.rstrip("\\")# 去除尾部 \ 符号
+    # strnset(article_title,'/','\/')
+    article_title=''.join(article_title.split('/'))
     parsed = urllib.parse.urlparse(article_url)
     rooturl = parsed.scheme+'://'+parsed.netloc
 
     with request.urlopen(article_url) as f:
         if(f.status==200):
             data = f.read()
-            try:
-                text = convert(feed_name+"/"+article_title,html2md(data.decode('utf-8'),rooturl))
-                # text = Tomd(text).markdown
-                print('Use : html2md')
-            except Exception as e:
-                text = Tomd(data.decode('utf-8')).markdown
-                print('Use : Tomd')
-            else:
-                pass
-
-    msg = MIMEText(text)
-    msg['Subject'] = 'New %s Article Available' % feed_name
-    msg['From'] = 'xxxxxxxxx@qq.com'
-    msg['To'] = 'xxxxxxxxx@qq.com'
-    smtp_server.send_message(msg)
-    smtp_server.quit()
+            text = html2md(data.decode('utf-8'),feed_name+"/"+article_title,rooturl)
+    try:
+        smtp_server = smtplib.SMTP('smtp.qq.com', 587)
+        smtp_server.ehlo()
+        smtp_server.starttls()
+        smtp_server.login('dissipator_520@qq.com', 'xxxxxxxxxxxxxxxxxxxx')
+        msg = MIMEText(text)
+        msg['Subject'] = 'New %s Article Available' % feed_name
+        msg['From'] = 'dissipator_520@qq.com'
+        msg['To'] = 'dissipator_520@qq.com'
+        smtp_server.send_message(msg)
+        smtp_server.quit()
+    except Exception as e:
+        print(e)
 
 def read_article_feed():
     """ Get articles from RSS feed """
@@ -166,17 +145,25 @@ def read_article_feed():
                 'linux':'https://linux.cn/rss.xml',
                 'niume':'https://segmentfault.com/feeds/blog/niume',
                 'yangshengliang':'https://www.yangshengliang.com/feed',
-                'ruanyifeng':'http://www.ruanyifeng.com/feed.html',
+                'ruanyifeng':'http://www.ruanyifeng.com/blog/atom.xml',
             }
     for fname in feeds:
         feed = feedparser.parse(feeds[fname])
 
         #print(feed)
         for article in feed['entries']:
-            send_notification(fname, article['title'], article['link'])
+            # send_notification(fname, article['title'], article['link'])
             if article_is_not_db(article['title'], article['published']):
                 send_notification(fname, article['title'], article['link'])
-                add_article_to_db(article['title'], article['published'])
+                try:
+                    add_article_to_db(article['title'], article['published'])
+                except Exception as e:
+                    print(e)
+                    add_article_to_db(article['title'], article["updated"])
+                # else  Exception as e:
+                #     print(e)
+                #     print(article)
+                #     pass
 
 if __name__ == '__main__':
     read_article_feed()
