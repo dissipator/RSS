@@ -115,7 +115,6 @@ def send_notification(feed_name, article_title, article_url):
     mkdir("./"+feed_name)
     article_title=article_title.strip()# 去除首位空格
     article_title=article_title.rstrip("\\")# 去除尾部 \ 符号
-    # strnset(article_title,'/','\/')
     article_title=''.join(article_title.split('/'))
     parsed = urllib.parse.urlparse(article_url)
     rooturl = parsed.scheme+'://'+parsed.netloc
@@ -128,7 +127,7 @@ def send_notification(feed_name, article_title, article_url):
         smtp_server = smtplib.SMTP('smtp.qq.com', 587)
         smtp_server.ehlo()
         smtp_server.starttls()
-        smtp_server.login('dissipator_520@qq.com', 'xxxxxxxxxxxxxxxxxxxx')
+        smtp_server.login('dissipator_520@qq.com', 'oucegoduxunibicf')
         msg = MIMEText(text)
         msg['Subject'] = 'New %s Article Available' % feed_name
         msg['From'] = 'dissipator_520@qq.com'
@@ -158,12 +157,9 @@ def read_article_feed():
                 try:
                     add_article_to_db(article['title'], article['published'])
                 except Exception as e:
-                    print(e)
                     add_article_to_db(article['title'], article["updated"])
-                # else  Exception as e:
-                #     print(e)
-                #     print(article)
-                #     pass
+                else:
+                    print(article)
 
 if __name__ == '__main__':
     read_article_feed()
