@@ -127,7 +127,7 @@ def send_notification(feed_name, article_title, article_url):
         smtp_server = smtplib.SMTP('smtp.qq.com', 587)
         smtp_server.ehlo()
         smtp_server.starttls()
-        smtp_server.login('dissipator_520@qq.com', 'oucegoduxunibicf')
+        smtp_server.login('dissipator_520@qq.com', 'xxxxxxxxxxxxxx')
         msg = MIMEText(text)
         msg['Subject'] = 'New %s Article Available' % feed_name
         msg['From'] = 'dissipator_520@qq.com'
